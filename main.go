@@ -1,11 +1,10 @@
 package main
 
 import (
-	"bufio"
-	"bytes"
 	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"log"
 	"os"
 	"os/exec"
@@ -14,7 +13,7 @@ import (
 	"github.com/prashantv/atuin-fzf/tcolor"
 )
 
-const _delim = ":::"
+const _delim = "\t:::\t"
 
 // TODOs:
 // Consider replacing the emoji X with a red indicator of exit status.
@@ -43,13 +42,14 @@ func main() {
 }
 
 func run(query string) error {
-	atuin, err := altuinSearch()
+	results, err := runAtuin(atuinParams{
+		Limit: 1000,
+	})
 	if err != nil {
 		return err
 	}
-	defer atuin.stdout.Close()
 
-	fzfInput, err := atuinAdapt(atuin.stdout)
+	fzfInput, err := atuinToFzf(results)
 	if err != nil {
 		return err
 	}
@@ -58,38 +58,10 @@ func run(query string) error {
 		return err
 	}
 
-	if err := atuin.cmd.Wait(); err != nil {
-		return err
-	}
-
 	return nil
 }
 
-type cmdOutput struct {
-	cmd    *exec.Cmd
-	stdout io.ReadCloser
-}
-
-func altuinSearch() (*cmdOutput, error) {
-	atuinFmt := strings.Join([]string{"{command}", "{exit}", "{directory}", "{duration}", "{time}"}, _delim)
-	cmd := exec.Command("atuin", "search", "--limit", "1000", "--format", atuinFmt)
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("atuin stdout: %w", err)
-	}
-
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start atuin: %w", err)
-	}
-
-	return &cmdOutput{
-		cmd:    cmd,
-		stdout: stdout,
-	}, nil
-}
-
-func atuinAdapt(input io.Reader) (io.Reader, error) {
+func atuinToFzf(results iter.Seq[atuinResult]) (io.Reader, error) {
 	r, w, err := os.Pipe()
 	if err != nil {
 		return nil, err
@@ -97,44 +69,42 @@ func atuinAdapt(input io.Reader) (io.Reader, error) {
 
 	curDir, _ := os.Getwd() // best effort
 	go func() {
-		scanner := bufio.NewScanner(input)
-		for scanner.Scan() {
-			parts := strings.Split(scanner.Text(), _delim)
-			command, exitCode, directory, duration, timestamp := parts[0], parts[1], parts[2], parts[3], parts[4]
+		for r := range results {
+			if r.Error != nil {
+				// FIXME
+				panic(err)
+			}
 
 			exitStatus := " "
-			if exitCode != "0" {
-				exitStatus = tcolor.Red.Foreground("exit " + exitCode)
+			if r.Exit != "0" {
+				exitStatus = tcolor.Red.Foreground("exit " + r.Exit)
 			}
 
 			dirCtx := ""
-			if directory == curDir {
+			if r.Directory == curDir {
 				dirCtx = " \033[38;5;242m(current dir)\033[0m"
 			}
 
 			_, err := fmt.Fprintln(w, strings.Join([]string{
-				command,
-				exitCode,
-				directory,
-				duration,
-				timestamp,
+				r.Command,
+				r.Exit,
+				r.Directory,
+				r.Duration,
+				r.Time,
 				exitStatus,
 				dirCtx,
 			}, _delim))
 			if err != nil {
+				// FIXME
 				panic(err)
 			}
 		}
-		if err := scanner.Err(); err != nil {
+
+		if err := w.Close(); err != nil {
 			// FIXME
 			panic(err)
 		}
-
-		if err := w.Close(); err != nil {
-			panic(err)
-		}
 	}()
-
 	return r, nil
 }
 
@@ -144,9 +114,7 @@ func fzf(input io.Reader, query string) error {
 		return fmt.Errorf("self executable: %w", err)
 	}
 
-	previewFmt := strings.Join([]string{"{1}", "{2}", "{3}", "{4}", "{5}", "{6}"}, _delim)
-	previewCmd := fmt.Sprintf("%s --preview %s ", selfExe, previewFmt)
-
+	previewCmd := fmt.Sprintf("%s --preview {}", selfExe)
 	fzfCmd := exec.Command(
 		"fzf",
 		"--tac",
@@ -178,7 +146,7 @@ func fzf(input io.Reader, query string) error {
 func fzfPreview(data string) error {
 	parts := strings.Split(data, _delim)
 	if len(parts) < 5 {
-		return fmt.Errorf("data format incorrect, expected 5 parts, got %d", len(parts))
+		return fmt.Errorf("data format incorrect, expected 5 parts, got %d in %s", len(parts), data)
 	}
 	command, exitCode, directory, duration, timestamp := parts[0], parts[1], parts[2], parts[3], parts[4]
 
@@ -201,33 +169,29 @@ func fzfPreview(data string) error {
 	fmt.Println(tcolor.Bold("Recent Similar Commands"))
 	fmt.Println("───────────────────────────────────────────────────")
 
-	// Run two atuin searches and combine/deduplicate the results
-	globalSearch := exec.Command("atuin", "search", "--limit", "5", "--search-mode", "prefix", "--format", "{command}\t{directory}", command)
-	dirSearch := exec.Command("atuin", "search", "--limit", "5", "--search-mode", "prefix", "--cwd", directory, "--format", "{command}\t{directory}", command)
-
-	seen := make(map[string]bool)
-	printResults := func(cmd *exec.Cmd) error {
-		output, err := cmd.Output()
+	seen := make(map[atuinResult]bool)
+	printResults := func(addArgs ...string) error {
+		results, err := runAtuin(atuinParams{
+			Query:          command,
+			Limit:          5,
+			AdditionalArgs: addArgs,
+		})
 		if err != nil {
 			return err
 		}
-		scanner := bufio.NewScanner(bytes.NewReader(output))
-		for scanner.Scan() {
-			line := scanner.Text()
-			if !seen[line] {
-				seen[line] = true
-				parts := strings.SplitN(line, "\t", 2)
-				if len(parts) == 2 {
-					fmt.Printf("%-40.40s (%s)\n", parts[0], parts[1])
-				}
+
+		for r := range results {
+			if !seen[r] {
+				seen[r] = true
+				fmt.Printf("%-40.40s (%s)\n", r.Command, r.Directory)
 			}
 		}
 		return nil
 	}
 
 	err := errors.Join(
-		printResults(globalSearch),
-		printResults(dirSearch),
+		printResults(),
+		printResults("--cwd", directory),
 	)
 	return err
 }
