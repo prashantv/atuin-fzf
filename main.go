@@ -16,7 +16,6 @@ import (
 const _delim = "\t:::\t"
 
 // TODOs:
-// Consider replacing the emoji X with a red indicator of exit status.
 // Add fzf bind to go to a dir AND exec
 // Bind to Ctrl-R
 
@@ -82,7 +81,7 @@ func atuinToFzf(results iter.Seq[atuinResult]) (io.Reader, error) {
 
 			dirCtx := ""
 			if r.Directory == curDir {
-				dirCtx = " \033[38;5;242m(current dir)\033[0m"
+				dirCtx = tcolor.Gray.Foreground("(same cwd)")
 			}
 
 			_, err := fmt.Fprintln(w, strings.Join([]string{
