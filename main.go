@@ -136,6 +136,11 @@ func fzf(input io.Reader, query string) error {
 	fzfCmd.Stdout = os.Stdout
 
 	if err := fzfCmd.Run(); err != nil {
+		if err, ok := err.(*exec.ExitError); ok && err.ExitCode() == 130 {
+			// User-interrupted.
+			return nil
+		}
+
 		return fmt.Errorf("run fzf: %w", err)
 	}
 

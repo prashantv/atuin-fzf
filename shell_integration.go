@@ -14,6 +14,7 @@ atuin-fzf-history() {
     local result
     result=$(%v)
     if [[ -z "$result" ]]; then
+        zle redisplay
         return
     fi
 
