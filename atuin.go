@@ -15,6 +15,7 @@ const _atuinDelim = "\t:::\t"
 type atuinParams struct {
 	Query          string
 	Limit          int
+	FilterMode     string
 	AdditionalArgs []string
 }
 
@@ -43,6 +44,10 @@ func runAtuin(p atuinParams) (iter.Seq[atuinResult], error) {
 		"search",
 		"--limit", strconv.Itoa(p.Limit),
 		"--format", format,
+	}
+	if p.FilterMode != "" {
+		args = append(args,
+			"--filter-mode", p.FilterMode)
 	}
 	args = append(args, p.AdditionalArgs...)
 	args = append(args, p.Query)

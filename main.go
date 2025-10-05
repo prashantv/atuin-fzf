@@ -44,12 +44,22 @@ func main() {
 }
 
 func run(query string) error {
-	results, err := runAtuin(atuinParams{
+	globalResults, err := runAtuin(atuinParams{
 		Limit: 1000,
 	})
 	if err != nil {
 		return err
 	}
+
+	sessionResults, err := runAtuin(atuinParams{
+		Limit:      1000,
+		FilterMode: "session",
+	})
+	if err != nil {
+		return err
+	}
+
+	results := mergeRight(globalResults, sessionResults)
 
 	fzfInput, err := atuinToFzf(results)
 	if err != nil {
@@ -221,4 +231,32 @@ func shortenHome(s string) string {
 	}
 
 	return s
+}
+
+// mergeRight merges results sequences, preferring results on the right.
+func mergeRight(res1, res2 iter.Seq[atuinResult]) iter.Seq[atuinResult] {
+	var res2Vals []atuinResult
+	seen := make(map[atuinResult]struct{})
+	for r := range res2 {
+		seen[r] = struct{}{}
+		res2Vals = append(res2Vals, r)
+	}
+
+	return func(yield func(atuinResult) bool) {
+		for r := range res1 {
+			if _, ok := seen[r]; ok {
+				continue
+			}
+
+			if !yield(r) {
+				return
+			}
+		}
+
+		for _, r := range res2Vals {
+			if !yield(r) {
+				return
+			}
+		}
+	}
 }
