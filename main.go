@@ -129,7 +129,7 @@ func fzf(input io.Reader, query string) error {
 		"--ansi",
 		"--scheme", "history",
 		"--prompt", "> ",
-		"--header", "[Enter] to select, [Ctrl-Y] to yank.",
+		"--header", "[Enter] to select, [Ctrl-O] to select and chdir, [Ctrl-Y] to yank.",
 		"--preview", previewCmd,
 		"--preview-window", "right:40%:wrap",
 		"--delimiter", _delim,
