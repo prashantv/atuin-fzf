@@ -170,18 +170,18 @@ func fzfPreview(data string) error {
 	}
 
 	fmt.Println(tcolor.Bold("Command"))
-	fmt.Println("───────────────────────────────────────────────────")
+	fmt.Println("────────────────────────")
 	fmt.Println(command)
 	fmt.Println()
 	fmt.Println(tcolor.Bold("Execution Details"))
-	fmt.Println("───────────────────────────────────────────────────")
+	fmt.Println("────────────────────────")
 	fmt.Printf("%-10s %s %s\n", "When:", timestamp, tcolor.Cyan.Foreground(relTimestamp+" ago"))
 	fmt.Printf("%-10s %s\n", "Directory:", shortenHome(directory))
 	fmt.Printf("%-10s %s\n", "Exit Code:", exitCol.Foreground(exitCode))
 	fmt.Printf("%-10s %s\n", "Duration:", duration)
 	fmt.Println()
 	fmt.Println(tcolor.Bold("Recent Similar Commands"))
-	fmt.Println("───────────────────────────────────────────────────")
+	fmt.Println("────────────────────────")
 
 	seen := make(map[atuinResult]bool)
 	printResults := func(addArgs ...string) error {
