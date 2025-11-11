@@ -1,9 +1,17 @@
 [tools]
 go = "1.25.4"
 gofumpt = "0.9.2"
+gotestsum = "1.13.0"
 
 [tasks.build]
-run = 'go build .'
+run = '''
+go build ./...
+'''
+
+[tasks.test]
+run = '''
+gotestsum ./...
+'''
 
 [tasks.lint]
 depends = [
