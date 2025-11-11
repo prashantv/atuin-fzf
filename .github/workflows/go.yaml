@@ -1,0 +1,31 @@
+name: Go
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: jdx/mise-action@v3.4.0
+
+      - name: Verify Go version
+        run: go version
+
+      - name: Build
+        run: mise run build
+
+      - name: Test
+        run: mise run test
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: jdx/mise-action@v3.4.0
+      - name: lint
+        run: mise run lint
