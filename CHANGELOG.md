@@ -24,7 +24,7 @@ summary if any
 -->
 
 
-## Unreleased
+## v0.0.2 - 2025-11-13
 
 ### Fixed
 
