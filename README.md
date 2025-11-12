@@ -28,4 +28,5 @@ Note: Only bash is supported.
 
 * Shows the exit status, and whether commands were run in the current directory as part of the primary fzf view.
 * Uses fzf previews to show more details about the comamnd (where it was run, duration, other similar commands)
-* Allows changing directory into the directory where a previous command was run (Ctrl-O).
+* Supports changing directory into the directory where a previous command was run (Ctrl-O).
+* Supports copying the command into the clipboard (macOS only) (Ctrl-Y).
