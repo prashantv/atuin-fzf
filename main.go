@@ -16,6 +16,11 @@ import (
 
 const _delim = "\t:::\t"
 
+const (
+	_unknownDir  = "unknown"
+	_unknownCode = "-1"
+)
+
 func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
@@ -170,6 +175,15 @@ func fzfPreview(data string) error {
 	if exitCode != "0" {
 		exitCol = tcolor.Red
 	}
+	if exitCode == _unknownCode {
+		exitCode = "unknown"
+		exitCol = tcolor.Gray
+	}
+	if directory == _unknownDir {
+		directory = tcolor.Gray.Foreground(directory)
+	} else {
+		directory = shortenHome(directory)
+	}
 
 	fmt.Println(tcolor.Bold("Command"))
 	fmt.Println("────────────────────────")
@@ -178,7 +192,7 @@ func fzfPreview(data string) error {
 	fmt.Println(tcolor.Bold("Execution Details"))
 	fmt.Println("────────────────────────")
 	fmt.Printf("%-10s %s %s\n", "When:", timestamp, tcolor.Cyan.Foreground(relTimestamp+" ago"))
-	fmt.Printf("%-10s %s\n", "Directory:", shortenHome(directory))
+	fmt.Printf("%-10s %s\n", "Directory:", directory)
 	fmt.Printf("%-10s %s\n", "Exit Code:", exitCol.Foreground(exitCode))
 	fmt.Printf("%-10s %s\n", "Duration:", duration)
 	fmt.Println()
@@ -218,6 +232,9 @@ func fzfPreview(data string) error {
 }
 
 func exitColor(exitCode string) string {
+	if exitCode == _unknownCode {
+		return ""
+	}
 	if exitCode != "0" {
 		return tcolor.Red.Foreground("exit " + exitCode)
 	}
@@ -225,6 +242,10 @@ func exitColor(exitCode string) string {
 }
 
 func shortenHome(s string) string {
+	if s == _unknownDir {
+		return ""
+	}
+
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
 		if suffix, ok := strings.CutPrefix(s, homeDir); ok {
