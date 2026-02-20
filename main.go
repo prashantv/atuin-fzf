@@ -229,7 +229,7 @@ func fzfPreview(data string) error {
 	if len(parts) < 6 {
 		return fmt.Errorf("data format incorrect, expected 5 parts, got %d in %s", len(parts), data)
 	}
-	command, exitCode, directory, duration, timestamp, relTimestamp := parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
+	command, exitCode, cwd, duration, timestamp, relTimestamp := parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
 
 	exitCol := tcolor.Green
 	if exitCode != "0" {
@@ -239,10 +239,11 @@ func fzfPreview(data string) error {
 		exitCode = "unknown"
 		exitCol = tcolor.Gray
 	}
-	if directory == _unknownDir {
-		directory = tcolor.Gray.Foreground(directory)
+	cwdDisplay := cwd
+	if cwd == _unknownDir {
+		cwdDisplay = tcolor.Gray.Foreground(cwd)
 	} else {
-		directory = shortenHome(directory)
+		cwdDisplay = shortenHome(cwd)
 	}
 
 	fmt.Println(tcolor.Bold("Command"))
@@ -252,7 +253,7 @@ func fzfPreview(data string) error {
 	fmt.Println(tcolor.Bold("Execution Details"))
 	fmt.Println("────────────────────────")
 	fmt.Printf("%-10s %s %s\n", "When:", timestamp, tcolor.Cyan.Foreground(relTimestamp+" ago"))
-	fmt.Printf("%-10s %s\n", "Directory:", directory)
+	fmt.Printf("%-10s %s\n", "Directory:", cwdDisplay)
 	fmt.Printf("%-10s %s\n", "Exit Code:", exitCol.Foreground(exitCode))
 	fmt.Printf("%-10s %s\n", "Duration:", duration)
 	fmt.Println()
@@ -271,6 +272,11 @@ func fzfPreview(data string) error {
 		}
 
 		for r := range results {
+			dirDisplay := shortenHome(r.Directory)
+			if r.Directory == cwd {
+				dirDisplay = "(same cwd)"
+			}
+
 			cmpR := r
 			cmpR.RelativeTime = ""
 
@@ -278,7 +284,7 @@ func fzfPreview(data string) error {
 				seen[cmpR] = true
 				fmt.Printf("%s %s %s\n%s\n",
 					tcolor.Cyan.Foreground(r.RelativeTime),
-					tcolor.Gray.Foreground(shortenHome(r.Directory)),
+					tcolor.Gray.Foreground(dirDisplay),
 					exitColor(r.Exit),
 					tcolor.Bold("$ ")+r.Command,
 				)
@@ -289,7 +295,7 @@ func fzfPreview(data string) error {
 
 	err := errors.Join(
 		printResults(),
-		printResults("--cwd", directory),
+		printResults("--cwd", cwd),
 	)
 	return err
 }
