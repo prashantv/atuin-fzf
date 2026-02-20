@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -10,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"unicode/utf16"
 
 	"github.com/prashantv/atuin-fzf/tcolor"
 )
@@ -26,6 +29,11 @@ func main() {
 		switch os.Args[1] {
 		case "--preview":
 			if err := fzfPreview(os.Args[2]); err != nil {
+				log.Fatal(err)
+			}
+			return
+		case "--clip":
+			if err := clip(); err != nil {
 				log.Fatal(err)
 			}
 			return
@@ -136,13 +144,13 @@ func fzf(input io.Reader, query string) error {
 		"--ansi",
 		"--scheme", "history",
 		"--prompt", "> ",
-		"--header", "[Enter] to select, [Ctrl-O] to select and chdir, [Ctrl-Y] to yank.",
+		"--header", "[Enter] to select, [Ctrl-O] to cd & use, [Ctrl-Y] to yank.",
 		"--preview", previewCmd,
 		"--preview-window", "right:40%:wrap,<50(hidden)",
 		"--delimiter", _delim,
 		"--with-nth", "{1}  {7} {8}",
 		"--accept-nth", "{1}",
-		"--bind", "ctrl-y:execute-silent(echo -n {1} | pbcopy)+abort",
+		"--bind", fmt.Sprintf("ctrl-y:execute-silent(echo -n {1} | %s --clip)+abort", selfExe),
 		"--bind", "ctrl-o:become(printf \"CHDIR:\\t%s\\t%s\" {3} {1})",
 		"--query", query,
 		"--height", "80%",
@@ -254,6 +262,45 @@ func shortenHome(s string) string {
 	}
 
 	return s
+}
+
+func clip() error {
+	clipCmd := os.Getenv("ATUIN_CLIP")
+	if clipCmd == "" {
+		for _, candidate := range []string{"pbcopy", "clip.exe"} {
+			if _, err := exec.LookPath(candidate); err == nil {
+				clipCmd = candidate
+				break
+			}
+		}
+	}
+	if clipCmd == "" {
+		return fmt.Errorf("no clipboard command found: set ATUIN_CLIP or install pbcopy/clip.exe")
+	}
+
+	var stdin io.Reader = os.Stdin
+	// clip.exe interprets piped input as UTF-16LE, so convert from UTF-8.
+	if filepath.Base(clipCmd) == "clip.exe" {
+		input, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("read stdin: %w", err)
+		}
+		stdin = utf8ToUTF16LE(input)
+	}
+
+	cmd := exec.Command(clipCmd)
+	cmd.Stdin = stdin
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+// utf8ToUTF16LE converts UTF-8 bytes to a UTF-16LE reader with a BOM.
+func utf8ToUTF16LE(b []byte) io.Reader {
+	encoded := utf16.Encode([]rune(string(b)))
+	var buf bytes.Buffer
+	buf.Write([]byte{0xFF, 0xFE}) // UTF-16LE BOM
+	binary.Write(&buf, binary.LittleEndian, encoded)
+	return &buf
 }
 
 // mergeRight merges results sequences, preferring results on the right.
