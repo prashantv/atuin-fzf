@@ -271,8 +271,11 @@ func fzfPreview(data string) error {
 		}
 
 		for r := range results {
-			if !seen[r] {
-				seen[r] = true
+			cmpR := r
+			cmpR.RelativeTime = ""
+
+			if !seen[cmpR] {
+				seen[cmpR] = true
 				fmt.Printf("%s %s %s\n%s\n",
 					tcolor.Cyan.Foreground(r.RelativeTime),
 					tcolor.Gray.Foreground(shortenHome(r.Directory)),
