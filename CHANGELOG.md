@@ -23,11 +23,19 @@ summary if any
 - details
 -->
 
-## Unreleased
+## v0.0.3 - 2026-02-20
 
 ### Added
 
+- Add support for search scopes (Ctrl-R) for only listing history within a directory.
+- Support copying to clipboard on Windows via clip.exe.
+
+### Fixed
+
 - Hide the preview window if the terminal width is too small.
+- Fix shell integration and fzf calls if binary location contains spaces.
+- Improve error messages for unexpected arguments/data.
+- Fix preview window missing and duplicate commands.
 
 ## v0.0.2 - 2025-11-13
 
