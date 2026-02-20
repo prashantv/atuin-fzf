@@ -187,7 +187,7 @@ func fzf(input io.Reader, query string) error {
 		return fmt.Errorf("self executable: %w", err)
 	}
 
-	previewCmd := fmt.Sprintf("%s --preview {}", selfExe)
+	previewCmd := fmt.Sprintf("%q --preview {}", selfExe)
 	fzfCmd := exec.Command(
 		"fzf",
 		"--read0",
@@ -201,9 +201,9 @@ func fzf(input io.Reader, query string) error {
 		"--delimiter", _delim,
 		"--with-nth", "{1}  {7} {8}",
 		"--accept-nth", "{1}",
-		"--bind", fmt.Sprintf("ctrl-y:execute-silent(echo -n {1} | %s --clip)+abort", selfExe),
+		"--bind", fmt.Sprintf("ctrl-y:execute-silent(echo -n {1} | %q --clip)+abort", selfExe),
 		"--bind", "ctrl-o:become(printf \"CHDIR:\\t%s\\t%s\" {3} {1})",
-		"--bind", fmt.Sprintf("ctrl-r:transform(%s --fzf-actions {fzf:prompt})", selfExe),
+		"--bind", fmt.Sprintf("ctrl-r:transform(%q --fzf-actions {fzf:prompt})", selfExe),
 		"--query", query,
 		"--height", "80%",
 	)
