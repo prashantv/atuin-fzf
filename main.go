@@ -44,6 +44,18 @@ func main() {
 			}
 			fmt.Printf(_zshFn, exe)
 			return
+		case "--list":
+			mode, query := parseListArgs(os.Args[2:])
+			if err := list(mode, query); err != nil {
+				log.Fatal(err)
+			}
+			return
+		case "--fzf-actions":
+			if len(os.Args) < 3 {
+				log.Fatal("--fzf-actions requires current prompt argument")
+			}
+			fzfActions(os.Args[2])
+			return
 		}
 	}
 	var initialQuery string
@@ -57,22 +69,10 @@ func main() {
 }
 
 func run(query string) error {
-	globalResults, err := runAtuin(atuinParams{
-		Limit: 1000,
-	})
+	results, err := fetchFiltered(dirFilterAll, query)
 	if err != nil {
 		return err
 	}
-
-	sessionResults, err := runAtuin(atuinParams{
-		Limit:      1000,
-		FilterMode: "session",
-	})
-	if err != nil {
-		return err
-	}
-
-	results := mergeRight(globalResults, sessionResults)
 
 	fzfInput, err := atuinToFzf(results)
 	if err != nil {
@@ -84,6 +84,50 @@ func run(query string) error {
 	}
 
 	return nil
+}
+
+func parseListArgs(args []string) (dirFilterMode, string) {
+	mode := dirFilterAll
+	var queryParts []string
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--dir-filter" && i+1 < len(args) {
+			mode = dirFilterMode(args[i+1])
+			i++
+		} else if v, ok := strings.CutPrefix(args[i], "--dir-filter="); ok {
+			mode = dirFilterMode(v)
+		} else {
+			queryParts = append(queryParts, args[i])
+		}
+	}
+	return mode, strings.Join(queryParts, " ")
+}
+
+func list(mode dirFilterMode, query string) error {
+	results, err := fetchFiltered(mode, query)
+	if err != nil {
+		return err
+	}
+
+	fzfInput, err := atuinToFzf(results)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(os.Stdout, fzfInput)
+	return err
+}
+
+func fzfActions(currentPrompt string) {
+	// Extract mode from prompt like "all> " or "directory> "
+	current := dirFilterMode(strings.TrimSuffix(currentPrompt, "> "))
+	next := nextDirFilter(current)
+
+	selfExe, err := os.Executable()
+	if err != nil {
+		selfExe = os.Args[0]
+	}
+
+	fmt.Printf("reload(%s --list --dir-filter=%s {q})+change-prompt(%s> )", selfExe, next, next)
 }
 
 func atuinToFzf(results iter.Seq[atuinResult]) (io.Reader, error) {
@@ -143,8 +187,8 @@ func fzf(input io.Reader, query string) error {
 		"--tac",
 		"--ansi",
 		"--scheme", "history",
-		"--prompt", "> ",
-		"--header", "[Enter] to select, [Ctrl-O] to cd & use, [Ctrl-Y] to yank.",
+		"--prompt", "all> ",
+		"--header", "[Enter] select  [Ctrl-O] cd & use  [Ctrl-Y] yank  [Ctrl-R] dir filter",
 		"--preview", previewCmd,
 		"--preview-window", "right:40%:wrap,<50(hidden)",
 		"--delimiter", _delim,
@@ -152,6 +196,7 @@ func fzf(input io.Reader, query string) error {
 		"--accept-nth", "{1}",
 		"--bind", fmt.Sprintf("ctrl-y:execute-silent(echo -n {1} | %s --clip)+abort", selfExe),
 		"--bind", "ctrl-o:become(printf \"CHDIR:\\t%s\\t%s\" {3} {1})",
+		"--bind", fmt.Sprintf("ctrl-r:transform(%s --fzf-actions {fzf:prompt})", selfExe),
 		"--query", query,
 		"--height", "80%",
 	)
