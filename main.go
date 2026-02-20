@@ -25,59 +25,75 @@ const (
 )
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func usage() {
+	fmt.Fprintf(os.Stderr, `Usage: %s [flags] [query]
+
+Flags:
+  --help          Show this help message
+  --zsh           Print zsh shell integration
+  --list          List history (without fzf)
+  --preview       Show fzf preview (used internally)
+  --clip          Copy stdin to clipboard (used internally)
+  --fzf-actions   Generate fzf actions (used internally)
+`, filepath.Base(os.Args[0]))
+}
+
+func run() error {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
+		case "--help", "-h":
+			usage()
+			return nil
 		case "--preview":
-			if err := fzfPreview(os.Args[2]); err != nil {
-				log.Fatal(err)
+			if len(os.Args) < 3 {
+				return fmt.Errorf("--preview requires an argument")
 			}
-			return
+			return fzfPreview(os.Args[2])
 		case "--clip":
-			if err := clip(); err != nil {
-				log.Fatal(err)
-			}
-			return
+			return clip()
 		case "--zsh":
 			exe, err := os.Executable()
 			if err != nil {
 				exe = os.Args[0]
 			}
 			fmt.Printf(_zshFn, exe)
-			return
+			return nil
 		case "--list":
 			mode, query := parseListArgs(os.Args[2:])
-			if err := list(mode, query); err != nil {
-				log.Fatal(err)
-			}
-			return
+			return list(mode, query)
 		case "--fzf-actions":
 			if len(os.Args) < 3 {
-				log.Fatal("--fzf-actions requires current prompt argument")
+				return fmt.Errorf("--fzf-actions requires current prompt argument")
 			}
 			fzfActions(os.Args[2])
-			return
+			return nil
+		default:
+			if strings.HasPrefix(os.Args[1], "-") {
+				return fmt.Errorf("unknown flag: %s\nRun '%s --help' for usage", os.Args[1], filepath.Base(os.Args[0]))
+			}
 		}
 	}
+
 	var initialQuery string
 	if len(os.Args) > 1 {
 		initialQuery = os.Args[1]
 	}
 
-	if err := run(initialQuery); err != nil {
-		log.Fatal(err)
-	}
+	return runInteractive(initialQuery)
 }
 
-func run(query string) error {
+func runInteractive(query string) error {
 	results, err := fetchFiltered(dirFilterAll, query)
 	if err != nil {
 		return err
 	}
 
-	fzfInput, err := atuinToFzf(results)
-	if err != nil {
-		return err
-	}
+	fzfInput := atuinToFzf(results)
 
 	if err := fzf(fzfInput, query); err != nil {
 		return err
@@ -108,10 +124,7 @@ func list(mode dirFilterMode, query string) error {
 		return err
 	}
 
-	fzfInput, err := atuinToFzf(results)
-	if err != nil {
-		return err
-	}
+	fzfInput := atuinToFzf(results)
 
 	_, err = io.Copy(os.Stdout, fzfInput)
 	return err
@@ -130,18 +143,15 @@ func fzfActions(currentPrompt string) {
 	fmt.Printf("reload(%s --list --dir-filter=%s {q})+change-prompt(%s> )", selfExe, next, next)
 }
 
-func atuinToFzf(results iter.Seq[atuinResult]) (io.Reader, error) {
-	r, w, err := os.Pipe()
-	if err != nil {
-		return nil, err
-	}
+func atuinToFzf(results iter.Seq[atuinResult]) io.Reader {
+	r, w := io.Pipe()
 
 	curDir, _ := os.Getwd() // best effort
 	go func() {
 		for r := range results {
 			if r.Error != nil {
-				// FIXME
-				panic(err)
+				w.CloseWithError(r.Error)
+				return
 			}
 
 			dirCtx := ""
@@ -161,17 +171,14 @@ func atuinToFzf(results iter.Seq[atuinResult]) (io.Reader, error) {
 				string(byte(0)),
 			}, _delim))
 			if err != nil {
-				// FIXME
-				panic(err)
+				w.CloseWithError(err)
+				return
 			}
 		}
 
-		if err := w.Close(); err != nil {
-			// FIXME
-			panic(err)
-		}
+		w.Close()
 	}()
-	return r, nil
+	return r
 }
 
 func fzf(input io.Reader, query string) error {
