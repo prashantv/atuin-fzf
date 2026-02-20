@@ -72,11 +72,12 @@ func runAtuin(p atuinParams) (iter.Seq[atuinResult], error) {
 
 		scanner := bufio.NewScanner(stdout)
 		scanner.Split(scanNull)
+		const expectedParts = 6
 		for scanner.Scan() {
-			parts := strings.SplitN(scanner.Text(), _atuinDelim, 6)
-			if len(parts) < 6 {
+			parts := strings.SplitN(scanner.Text(), _atuinDelim, expectedParts)
+			if len(parts) < expectedParts {
 				yield(atuinResult{
-					Error: fmt.Errorf("text %q doesn't have expected 5 delimiters", scanner.Text()),
+					Error: fmt.Errorf("atuin output has fewer parts (%d) than expected (%d): %q", len(parts), expectedParts, scanner.Text()),
 				})
 				return
 			}

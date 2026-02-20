@@ -225,9 +225,10 @@ func fzf(input io.Reader, query string) error {
 }
 
 func fzfPreview(data string) error {
+	const expectedParts = 6
 	parts := strings.Split(data, _delim)
-	if len(parts) < 6 {
-		return fmt.Errorf("data format incorrect, expected 5 parts, got %d in %s", len(parts), data)
+	if len(parts) < expectedParts {
+		return fmt.Errorf("fzf preview input has fewer parts (%d) than expected (%d): %q", len(parts), expectedParts, data)
 	}
 	command, exitCode, cwd, duration, timestamp, relTimestamp := parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
 
