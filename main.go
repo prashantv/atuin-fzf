@@ -88,7 +88,7 @@ func run() error {
 }
 
 func runInteractive(query string) error {
-	results, err := fetchFiltered(dirFilterAll, query)
+	results, err := fetchFiltered(dirFilterHost, query)
 	if err != nil {
 		return err
 	}
@@ -103,7 +103,7 @@ func runInteractive(query string) error {
 }
 
 func parseListArgs(args []string) (dirFilterMode, string) {
-	mode := dirFilterAll
+	mode := dirFilterHost
 	var queryParts []string
 	for i := 0; i < len(args); i++ {
 		if args[i] == "--dir-filter" && i+1 < len(args) {
@@ -131,7 +131,7 @@ func list(mode dirFilterMode, query string) error {
 }
 
 func fzfActions(currentPrompt string) {
-	// Extract mode from prompt like "all> " or "directory> "
+	// Extract mode from prompt like "host> " or "directory> "
 	current := dirFilterMode(strings.TrimSuffix(currentPrompt, "> "))
 	next := nextDirFilter(current)
 
@@ -146,7 +146,9 @@ func fzfActions(currentPrompt string) {
 func atuinToFzf(results iter.Seq[atuinResult]) io.Reader {
 	r, w := io.Pipe()
 
-	curDir, _ := os.Getwd() // best effort
+	curDir, _ := os.Getwd()        // best effort
+	curHost, _ := os.Hostname()     // best effort
+
 	go func() {
 		for r := range results {
 			if r.Error != nil {
@@ -159,6 +161,11 @@ func atuinToFzf(results iter.Seq[atuinResult]) io.Reader {
 				dirCtx = tcolor.Gray.Foreground("(same cwd)")
 			}
 
+			hostCtx := ""
+			if curHost != "" && r.Host != curHost {
+				hostCtx = tcolor.Blue.Foreground(r.Host)
+			}
+
 			_, err := fmt.Fprint(w, strings.Join([]string{
 				r.Command,
 				r.Exit,
@@ -166,8 +173,10 @@ func atuinToFzf(results iter.Seq[atuinResult]) io.Reader {
 				r.Duration,
 				r.Time,
 				r.RelativeTime,
+				r.Host,
 				exitColor(r.Exit),
 				dirCtx,
+				hostCtx,
 				string(byte(0)),
 			}, _delim))
 			if err != nil {
@@ -194,12 +203,12 @@ func fzf(input io.Reader, query string) error {
 		"--tac",
 		"--ansi",
 		"--scheme", "history",
-		"--prompt", "all> ",
-		"--header", "[Enter] select  [Ctrl-O] cd & use  [Ctrl-Y] yank  [Ctrl-R] dir filter",
+		"--prompt", "host> ",
+		"--header", "[Enter] select  [Ctrl-O] cd & use  [Ctrl-Y] yank  [Ctrl-R] filter",
 		"--preview", previewCmd,
 		"--preview-window", "right:40%:wrap,<50(hidden)",
 		"--delimiter", _delim,
-		"--with-nth", "{1}  {7} {8}",
+		"--with-nth", "{1}  {8} {9} {10}",
 		"--accept-nth", "{1}",
 		"--bind", fmt.Sprintf("ctrl-y:execute-silent(echo -n {1} | %q --clip)+abort", selfExe),
 		"--bind", "ctrl-o:become(printf \"CHDIR:\\t%s\\t%s\" {3} {1})",
@@ -225,12 +234,12 @@ func fzf(input io.Reader, query string) error {
 }
 
 func fzfPreview(data string) error {
-	const expectedParts = 6
+	const expectedParts = 7
 	parts := strings.Split(data, _delim)
 	if len(parts) < expectedParts {
 		return fmt.Errorf("fzf preview input has fewer parts (%d) than expected (%d): %q", len(parts), expectedParts, data)
 	}
-	command, exitCode, cwd, duration, timestamp, relTimestamp := parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
+	command, exitCode, cwd, duration, timestamp, relTimestamp, host := parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], parts[6]
 
 	exitCol := tcolor.Green
 	if exitCode != "0" {
@@ -255,6 +264,7 @@ func fzfPreview(data string) error {
 	fmt.Println("────────────────────────")
 	fmt.Printf("%-10s %s %s\n", "When:", timestamp, tcolor.Cyan.Foreground(relTimestamp+" ago"))
 	fmt.Printf("%-10s %s\n", "Directory:", cwdDisplay)
+	fmt.Printf("%-10s %s\n", "Host:", host)
 	fmt.Printf("%-10s %s\n", "Exit Code:", exitCol.Foreground(exitCode))
 	fmt.Printf("%-10s %s\n", "Duration:", duration)
 	fmt.Println()
@@ -283,7 +293,8 @@ func fzfPreview(data string) error {
 
 			if !seen[cmpR] {
 				seen[cmpR] = true
-				fmt.Printf("%s %s %s\n%s\n",
+				fmt.Printf("%s %s %s %s\n%s\n",
+					tcolor.Blue.Foreground(r.Host),
 					tcolor.Cyan.Foreground(r.RelativeTime),
 					tcolor.Gray.Foreground(dirDisplay),
 					exitColor(r.Exit),
