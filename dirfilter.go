@@ -9,17 +9,19 @@ import (
 type dirFilterMode string
 
 const (
-	dirFilterAll       dirFilterMode = "all"
+	dirFilterHost      dirFilterMode = "host"
 	dirFilterDirectory dirFilterMode = "directory"
 	dirFilterSubtree   dirFilterMode = "subtree"
 	dirFilterWorkspace dirFilterMode = "workspace"
+	dirFilterGlobal    dirFilterMode = "global"
 )
 
 var dirFilterCycle = []dirFilterMode{
-	dirFilterAll,
+	dirFilterHost,
 	dirFilterDirectory,
 	dirFilterSubtree,
 	dirFilterWorkspace,
+	dirFilterGlobal,
 }
 
 func nextDirFilter(current dirFilterMode) dirFilterMode {
@@ -28,7 +30,7 @@ func nextDirFilter(current dirFilterMode) dirFilterMode {
 			return dirFilterCycle[(i+1)%len(dirFilterCycle)]
 		}
 	}
-	return dirFilterAll
+	return dirFilterHost
 }
 
 func fetchFiltered(mode dirFilterMode, query string) (iter.Seq[atuinResult], error) {
@@ -43,7 +45,7 @@ func fetchFiltered(mode dirFilterMode, query string) (iter.Seq[atuinResult], err
 
 	case dirFilterSubtree:
 		// Fetch all results, then client-side filter to cwd subtree.
-		results, err := fetchFiltered(dirFilterAll, query)
+		results, err := fetchFiltered(dirFilterHost, query)
 		if err != nil {
 			return nil, err
 		}
@@ -53,8 +55,8 @@ func fetchFiltered(mode dirFilterMode, query string) (iter.Seq[atuinResult], err
 		}
 		return filterByDirPrefix(results, cwd), nil
 
-	default: // dirFilterAll
-		global, err := runAtuin(atuinParams{Query: query, Limit: 1000})
+	case dirFilterGlobal:
+		global, err := runAtuin(atuinParams{Query: query, Limit: 1000, FilterMode: "global"})
 		if err != nil {
 			return nil, err
 		}
@@ -63,6 +65,17 @@ func fetchFiltered(mode dirFilterMode, query string) (iter.Seq[atuinResult], err
 			return nil, err
 		}
 		return mergeRight(global, session), nil
+
+	default: // dirFilterHost
+		host, err := runAtuin(atuinParams{Query: query, Limit: 1000, FilterMode: "host"})
+		if err != nil {
+			return nil, err
+		}
+		session, err := runAtuin(atuinParams{Query: query, Limit: 1000, FilterMode: "session"})
+		if err != nil {
+			return nil, err
+		}
+		return mergeRight(host, session), nil
 	}
 }
 

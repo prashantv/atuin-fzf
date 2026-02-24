@@ -25,6 +25,7 @@ type atuinResult struct {
 	RelativeTime string
 	Duration     string
 	Exit         string
+	Host         string
 	Directory    string
 	Command      string
 
@@ -37,6 +38,7 @@ func runAtuin(p atuinParams) (iter.Seq[atuinResult], error) {
 		"{relativetime}",
 		"{duration}",
 		"{exit}",
+		"{host}",
 		"{directory}",
 		"{command}", // intentionally last so command can contain the delimiter.
 	}, _atuinDelim)
@@ -72,7 +74,7 @@ func runAtuin(p atuinParams) (iter.Seq[atuinResult], error) {
 
 		scanner := bufio.NewScanner(stdout)
 		scanner.Split(scanNull)
-		const expectedParts = 6
+		const expectedParts = 7
 		for scanner.Scan() {
 			parts := strings.SplitN(scanner.Text(), _atuinDelim, expectedParts)
 			if len(parts) < expectedParts {
@@ -81,13 +83,14 @@ func runAtuin(p atuinParams) (iter.Seq[atuinResult], error) {
 				})
 				return
 			}
-			timestamp, relTimestamp, duration, exitCode, directory, command := parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]
+			timestamp, relTimestamp, duration, exitCode, host, directory, command := parts[0], parts[1], parts[2], parts[3], parts[4], parts[5], parts[6]
 
 			if !yield(atuinResult{
 				Time:         timestamp,
 				RelativeTime: relTimestamp,
 				Duration:     duration,
 				Exit:         exitCode,
+				Host:         host,
 				Directory:    directory,
 				Command:      command,
 			}) {
