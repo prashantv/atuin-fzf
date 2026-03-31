@@ -347,6 +347,10 @@ func fzfPreview(data string) error {
 		}
 
 		for r := range results {
+			if r.Error != nil {
+				return err
+			}
+
 			dirDisplay := shortenHome(r.Directory)
 			if r.Directory == cwd {
 				dirDisplay = "(same cwd)"
