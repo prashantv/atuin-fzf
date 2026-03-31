@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -406,33 +407,36 @@ func shortenHome(s string) string {
 }
 
 func clip() error {
-	clipCmd := os.Getenv("ATUIN_CLIP")
-	if clipCmd == "" {
-		for _, candidate := range []string{"pbcopy", "clip.exe"} {
-			if _, err := exec.LookPath(candidate); err == nil {
-				clipCmd = candidate
-				break
-			}
-		}
-	}
-	if clipCmd == "" {
-		return fmt.Errorf("no clipboard command found: set ATUIN_CLIP or install pbcopy/clip.exe")
+	input, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return fmt.Errorf("read stdin: %w", err)
 	}
 
-	var stdin io.Reader = os.Stdin
-	// clip.exe interprets piped input as UTF-16LE, so convert from UTF-8.
-	if filepath.Base(clipCmd) == "clip.exe" {
-		input, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			return fmt.Errorf("read stdin: %w", err)
+	// If ATUIN_CLIP is set, use the specified command.
+	if clipCmd := os.Getenv("ATUIN_CLIP"); clipCmd != "" {
+		var stdin io.Reader = strings.NewReader(string(input))
+		// clip.exe interprets piped input as UTF-16LE, so convert from UTF-8.
+		if filepath.Base(clipCmd) == "clip.exe" {
+			stdin = utf8ToUTF16LE(input)
 		}
-		stdin = utf8ToUTF16LE(input)
+		cmd := exec.Command(clipCmd)
+		cmd.Stdin = stdin
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
 	}
 
-	cmd := exec.Command(clipCmd)
-	cmd.Stdin = stdin
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	// Use OSC52 escape sequence to set the terminal clipboard.
+	// Write to /dev/tty to ensure we reach the terminal directly,
+	// since stdout/stderr may be piped by fzf.
+	tty, err := os.OpenFile("/dev/tty", os.O_WRONLY, 0)
+	if err != nil {
+		return fmt.Errorf("open /dev/tty: %w", err)
+	}
+	defer tty.Close()
+
+	encoded := base64.StdEncoding.EncodeToString(input)
+	_, err = fmt.Fprintf(tty, "\033]52;c;%s\a", encoded)
+	return err
 }
 
 // utf8ToUTF16LE converts UTF-8 bytes to a UTF-16LE reader with a BOM.
