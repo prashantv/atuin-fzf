@@ -18,7 +18,7 @@ import (
 	"github.com/prashantv/atuin-fzf/tcolor"
 )
 
-const _delim = "\t:::\t"
+const _delim = " \u200B"
 
 const (
 	_unknownDir  = "unknown"
@@ -264,7 +264,8 @@ func fzf(input io.Reader, query string) error {
 		"--preview", previewCmd,
 		"--preview-window", "right:40%:wrap,<50(hidden)",
 		"--delimiter", _delim,
-		"--with-nth", "{1}  {8} {9} {10}",
+		"--nth", "1",
+		"--with-nth", "{1}" + _delim + " {8}" + _delim + "{9}" + _delim + "{10}",
 		"--accept-nth", "{1}",
 		"--bind", fmt.Sprintf("ctrl-y:execute-silent(echo -n {1} | %q --clip)+abort", selfExe),
 		"--bind", "ctrl-o:become(printf \"CHDIR:\\t%s\\t%s\" {3} {1})",

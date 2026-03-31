@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-const _atuinDelim = "\t:::\t"
+const _atuinDelim = _delim + ":::" + _delim
 
 type atuinParams struct {
 	Query          string
